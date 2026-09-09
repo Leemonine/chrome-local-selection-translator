@@ -2,6 +2,9 @@
 
 选中网页文字后点击选区旁的“译”，使用 Chrome / Chromium 内置 Translator API 翻译为简体中文。
 
+<img width="570" height="412.5" alt="image" src="https://github.com/user-attachments/assets/0037b316-6183-495b-870b-a5570480501a" />
+
+
 ## 特性
 
 - Manifest V3。
