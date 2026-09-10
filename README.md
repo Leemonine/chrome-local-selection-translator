@@ -2,8 +2,6 @@
 
 选中网页文字后点击选区旁的“译”，使用 Chrome 或 Edge 内置 Translator API 在本机翻译。
 
-<img width="570" height="412.5" alt="本地划词翻译使用效果" src="https://github.com/user-attachments/assets/0037b316-6183-495b-870b-a5570480501a" />
-
 ## 浏览器版本要求
 
 - Google Chrome 桌面版 **138 或更高版本**。Chrome 官方文档说明 Translator API 从 Chrome 138 稳定版开始提供。
