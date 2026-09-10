@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>本地划词翻译</title>
+  <link rel="stylesheet" href="translate.css">
+</head>
+<body>
+  <header>
+    <strong>本地划词翻译</strong>
+    <button id="close" type="button" aria-label="关闭">×</button>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <label for="source-language">原文语言</label>
+      <select id="source-language"></select>
+      <button id="swap-languages" type="button" title="互换原文和目标语言" aria-label="互换原文和目标语言">⇄</button>
+      <label for="target-language">目标语言</label>
+      <select id="target-language"></select>
+      <button id="retry" type="button">重新翻译</button>
+      <button id="copy" type="button" disabled>复制译文</button>
+      <label class="history-toggle"><input id="save-history" type="checkbox"> 保存历史</label>
+    </div>
+
+    <section class="result-card">
+      <div id="status" role="status">正在读取选中文字…</div>
+      <div id="result" hidden></div>
+    </section>
+
+    <details>
+      <summary>查看原文</summary>
+      <div id="source-text"></div>
+    </details>
+  </main>
+
+  <script src="translate.js"></script>
+</body>
+</html>

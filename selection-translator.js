@@ -2,6 +2,7 @@
   "use strict";
 
   const MAX_TEXT_LENGTH = 6000;
+  const SUPPORTED_LANGUAGES = new Set(["zh-Hans", "en", "ja", "ko", "de", "fr", "es", "it", "pt", "ru"]);
   const host = document.createElement("div");
   host.id = "chrome-local-selection-translator";
   host.setAttribute("aria-live", "polite");
@@ -11,20 +12,18 @@
   const style = document.createElement("style");
   style.textContent = `
     :host { all: initial; }
-    .button, .panel { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; color: #172033; }
-    .button { position: fixed; z-index: 2147483647; display: none; width: 30px; height: 30px; border: 0; border-radius: 15px; background: #2463eb; color: #fff; cursor: pointer; font-size: 14px; font-weight: 700; line-height: 30px; text-align: center; box-shadow: 0 3px 12px rgba(20, 50, 120, .28); }
-    .button:hover { background: #174ec6; }
-    .panel { position: absolute; z-index: 2147483647; display: none; flex-direction: column; width: 400px; min-width: 240px; min-height: 72px; max-width: calc(100vw - 24px); overflow: hidden; resize: both; padding: 14px 40px 12px 14px; border: 1px solid #d8deea; border-radius: 10px; background: #fff; color: #172033; font-size: 14px; line-height: 1.55; box-shadow: 0 9px 30px rgba(20, 33, 61, .22); }
+    .button, .panel { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; color: #1d1d1f; }
+    .button { position: fixed; z-index: 2147483647; display: none; width: 30px; height: 30px; border: 0; border-radius: 15px; background: #fa243c; color: #fff; cursor: pointer; font-size: 14px; font-weight: 700; line-height: 30px; text-align: center; box-shadow: 0 3px 12px rgba(0, 0, 0, .22); }
+    .button:hover { background: #d91e35; }
+    .panel { position: absolute; z-index: 2147483647; display: none; flex-direction: column; width: 400px; min-width: 280px; min-height: 72px; max-width: calc(100vw - 24px); overflow: hidden; resize: both; padding: 38px 14px 12px; border: 1px solid #d2d2d7; border-radius: 10px; background: #fff; color: #1d1d1f; font-size: 14px; line-height: 1.55; box-shadow: 0 9px 30px rgba(0, 0, 0, .20); }
     .message { flex: 1 1 auto; min-height: 0; overflow: auto; white-space: pre-wrap; }
     .panel[data-state="error"] { color: #9a1b1b; }
-    .panel[data-state="hint"] { color: #4b5568; }
-    .close { position: absolute; top: 6px; right: 7px; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #596579; cursor: pointer; font-size: 20px; line-height: 24px; }
-    .close:hover { background: #eef2f7; color: #172033; }
-    .settings { flex: 0 0 auto; margin-top: 10px; padding-top: 8px; border-top: 1px solid #edf0f5; color: #596579; font-size: 12px; line-height: 1.35; }
-    .setting { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
-    .setting + .setting { margin-top: 6px; }
-    .setting input { width: 14px; height: 14px; margin: 0; accent-color: #2463eb; cursor: pointer; }
-    .setting select { min-width: 108px; padding: 2px 4px; border: 1px solid #cfd6e3; border-radius: 4px; background: #fff; color: #344156; font: inherit; }
+    .panel[data-state="hint"] { color: #6e6e73; }
+    .panel-actions { position: absolute; top: 6px; right: 7px; display: flex; align-items: center; gap: 2px; }
+    .panel-action { height: 26px; padding: 0 7px; border: 0; border-radius: 6px; background: transparent; color: #6e6e73; cursor: pointer; font: inherit; font-size: 12px; line-height: 26px; }
+    .panel-action:hover:not(:disabled) { background: #f2f2f7; color: #1d1d1f; }
+    .panel-action:disabled { cursor: default; opacity: .4; }
+    .close { width: 26px; padding: 0; font-size: 20px; line-height: 24px; }
   `;
 
   const button = document.createElement("button");
@@ -37,42 +36,24 @@
   const panel = document.createElement("div");
   panel.className = "panel";
   panel.setAttribute("role", "dialog");
+  const panelActions = document.createElement("div");
+  panelActions.className = "panel-actions";
+  const copyButton = document.createElement("button");
+  copyButton.className = "panel-action";
+  copyButton.type = "button";
+  copyButton.textContent = "复制";
+  copyButton.disabled = true;
+  copyButton.title = "复制译文";
   const closeButton = document.createElement("button");
-  closeButton.className = "close";
+  closeButton.className = "panel-action close";
   closeButton.type = "button";
   closeButton.textContent = "×";
   closeButton.title = "关闭";
   closeButton.setAttribute("aria-label", "关闭翻译结果");
+  panelActions.append(copyButton, closeButton);
   const message = document.createElement("div");
   message.className = "message";
-  const settings = document.createElement("div");
-  settings.className = "settings";
-  const setting = document.createElement("label");
-  setting.className = "setting";
-  const settingCheckbox = document.createElement("input");
-  settingCheckbox.type = "checkbox";
-  settingCheckbox.checked = true;
-  const settingText = document.createElement("span");
-  settingText.textContent = "点击页面其他位置时自动关闭";
-  setting.append(settingCheckbox, settingText);
-  const languageSetting = document.createElement("label");
-  languageSetting.className = "setting";
-  const languageText = document.createElement("span");
-  languageText.textContent = "原文语言";
-  const languageSelect = document.createElement("select");
-  [
-    ["auto", "自动识别"], ["en", "英语"], ["ja", "日语"], ["ko", "韩语"],
-    ["de", "德语"], ["fr", "法语"], ["es", "西班牙语"], ["it", "意大利语"],
-    ["pt", "葡萄牙语"], ["ru", "俄语"]
-  ].forEach(([value, label]) => {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    languageSelect.appendChild(option);
-  });
-  languageSetting.append(languageText, languageSelect);
-  settings.append(setting, languageSetting);
-  panel.append(closeButton, message, settings);
+  panel.append(panelActions, message);
   shadow.append(style, button, panel);
 
   let selectedParts = [];
@@ -82,6 +63,9 @@
   let translationRequest = 0;
   let dismissedRequest = 0;
   let sourceLanguage = "auto";
+  let targetLanguage = "zh-Hans";
+  let historyEnabled = false;
+  let translatedText = "";
   let initialPanelWidth = 400;
   let resizingPanel = false;
 
@@ -95,12 +79,11 @@
 
   function updateCloseSetting(value) {
     closeOnOutsideClick = Boolean(value);
-    settingCheckbox.checked = closeOnOutsideClick;
   }
 
   function applyInitialPanelSize() {
-    const maxWidth = Math.max(240, window.innerWidth - 24);
-    panel.style.width = `${Math.max(240, Math.min(initialPanelWidth, maxWidth))}px`;
+    const maxWidth = Math.max(280, window.innerWidth - 24);
+    panel.style.width = `${Math.max(280, Math.min(initialPanelWidth, maxWidth))}px`;
     panel.style.height = "auto";
     panel.style.maxHeight = `${Math.max(72, window.innerHeight - 24)}px`;
   }
@@ -117,6 +100,8 @@
   function showPanel(text, state = "") {
     message.textContent = text;
     panel.dataset.state = state;
+    translatedText = state ? "" : text;
+    copyButton.disabled = !translatedText;
     const wasHidden = panel.style.display === "none";
     panel.style.display = "flex";
     if (wasHidden) applyInitialPanelSize();
@@ -129,6 +114,23 @@
       panel.style.left = `${Math.max(window.scrollX + margin, Math.min(desiredLeft, window.scrollX + window.innerWidth - width - margin))}px`;
       panel.style.top = `${Math.max(window.scrollY + margin, Math.min(desiredTop, window.scrollY + window.innerHeight - height - margin))}px`;
     }
+  }
+
+  async function copyTranslatedText() {
+    if (!translatedText) return;
+    try {
+      await navigator.clipboard.writeText(translatedText);
+    } catch (_) {
+      const temporary = document.createElement("textarea");
+      temporary.value = translatedText;
+      temporary.style.cssText = "position:fixed;left:-9999px;top:0";
+      shadow.appendChild(temporary);
+      temporary.select();
+      document.execCommand("copy");
+      temporary.remove();
+    }
+    copyButton.textContent = "已复制";
+    setTimeout(() => { copyButton.textContent = "复制"; }, 1200);
   }
 
   function captureSelection() {
@@ -145,7 +147,7 @@
     selectedText = limitedText;
     selectedParts = getSelectedParts(limitedText);
     selectionRect = rect;
-    initialPanelWidth = Math.max(240, Math.min(Math.ceil(rect.width), Math.min(720, window.innerWidth - 24)));
+    initialPanelWidth = Math.max(280, Math.min(Math.ceil(rect.width), Math.min(720, window.innerWidth - 24)));
     button.style.display = "block";
     const left = Math.max(8, Math.min(rect.right + 6, window.innerWidth - 38));
     const top = Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 38));
@@ -153,7 +155,7 @@
     button.style.top = `${top}px`;
   }
 
-  function detectSourceLanguage(text) {
+  function fallbackSourceLanguage(text) {
     if (/[\u3040-\u30ff\u31f0-\u31ff]/.test(text)) return "ja";
     if (/[\uac00-\ud7af]/.test(text)) return "ko";
     if (/[\u0400-\u04ff]/.test(text)) return "ru";
@@ -161,21 +163,86 @@
     return "en";
   }
 
-  async function getTranslatorOptions(detectedLanguage) {
+  function normalizeLanguageTag(language) {
+    const value = String(language || "").trim();
+    if (!value) return "";
+    const primary = value.toLowerCase().split("-")[0];
+    return primary === "zh" ? "zh-Hans" : primary;
+  }
+
+  function sameLanguage(left, right) {
+    return normalizeLanguageTag(left) === normalizeLanguageTag(right);
+  }
+
+  async function detectSourceLanguage(text, requestId) {
+    const fallback = fallbackSourceLanguage(text);
+    if (text.trim().length < 12 || !globalThis.LanguageDetector || typeof globalThis.LanguageDetector.create !== "function") {
+      return fallback;
+    }
+    let detector;
+    try {
+      const availability = typeof globalThis.LanguageDetector.availability === "function"
+        ? await globalThis.LanguageDetector.availability()
+        : "available";
+      if (availability === "unavailable") return fallback;
+      if (availability === "downloadable" || availability === "downloading") {
+        if (requestId === translationRequest && dismissedRequest !== requestId) showPanel("正在准备浏览器本地语言识别模型…", "hint");
+      } else if (requestId === translationRequest && dismissedRequest !== requestId) {
+        showPanel("正在识别原文语言…", "hint");
+      }
+      detector = await globalThis.LanguageDetector.create({
+        monitor(monitor) {
+          monitor.addEventListener("downloadprogress", (event) => {
+            const progress = typeof event.loaded === "number" ? ` ${Math.round(event.loaded * 100)}%` : "";
+            if (requestId === translationRequest && dismissedRequest !== requestId) showPanel(`正在下载浏览器本地语言识别模型…${progress}`, "hint");
+          });
+        }
+      });
+      const results = await detector.detect(text);
+      const best = Array.isArray(results) ? results.find((item) => item?.detectedLanguage && item.detectedLanguage !== "und") : null;
+      return best && Number(best.confidence) >= 0.35
+        ? normalizeLanguageTag(best.detectedLanguage) || fallback
+        : fallback;
+    } catch (error) {
+      console.warn("Local language detection fell back to script detection:", error);
+      return fallback;
+    } finally {
+      detector?.destroy?.();
+    }
+  }
+
+  function languageCandidates(language) {
+    return normalizeLanguageTag(language) === "zh-Hans" ? ["zh-Hans", "zh"] : [language];
+  }
+
+  async function getTranslatorOptions(detectedLanguage, requestedTargetLanguage) {
     if (!globalThis.Translator || typeof globalThis.Translator.create !== "function") {
       throw new Error("UNAVAILABLE_API");
     }
-    const candidates = ["zh-Hans", "zh"];
-    for (const targetLanguage of candidates) {
-      try {
-        const options = { sourceLanguage: detectedLanguage, targetLanguage };
-        const availability = await globalThis.Translator.availability(options);
-        if (availability !== "unavailable") return { options, availability };
-      } catch (_) {
-        // Try the browser's alternate Chinese language tag.
+    for (const sourceCandidate of languageCandidates(detectedLanguage)) {
+      for (const targetCandidate of languageCandidates(requestedTargetLanguage)) {
+        try {
+          const options = { sourceLanguage: sourceCandidate, targetLanguage: targetCandidate };
+          const availability = await globalThis.Translator.availability(options);
+          if (availability !== "unavailable") return { options, availability };
+        } catch (_) {
+          // Try the browser's alternate language tag where one exists.
+        }
       }
     }
     throw new Error("UNSUPPORTED_LANGUAGE");
+  }
+
+  function saveHistory(sourceTextValue, translatedTextValue, source, target) {
+    if (!historyEnabled || !translatedTextValue) return;
+    document.dispatchEvent(new CustomEvent("local-selection-translator:save-history", {
+      detail: {
+        sourceText: sourceTextValue,
+        translatedText: translatedTextValue,
+        sourceLanguage: source,
+        targetLanguage: target
+      }
+    }));
   }
 
   async function translateSelection() {
@@ -185,23 +252,25 @@
     closePanel();
     const requestId = ++translationRequest;
     try {
-      const detectedLanguage = sourceLanguage === "auto" ? detectSourceLanguage(selectedText) : sourceLanguage;
-      if (detectedLanguage === "zh" || detectedLanguage === "zh-Hans") {
+      const detectedLanguage = sourceLanguage === "auto"
+        ? await detectSourceLanguage(selectedText, requestId)
+        : sourceLanguage;
+      if (sameLanguage(detectedLanguage, targetLanguage)) {
         showPanel(selectedParts.map((part) => part.value).join(""), "");
         return;
       }
-      const { options, availability } = await getTranslatorOptions(detectedLanguage);
+      const { options, availability } = await getTranslatorOptions(detectedLanguage, targetLanguage);
       if (availability === "downloadable" || availability === "downloading") {
-        showPanel("正在准备 Chrome 本地英译中文模型。首次使用可能需要下载，完成后会自动翻译…", "hint");
+        showPanel("正在准备浏览器本地翻译模型。首次使用可能需要下载，完成后会自动翻译…", "hint");
       } else {
-        showPanel("正在使用 Chrome 本地翻译…", "hint");
+        showPanel("正在使用浏览器本地翻译…", "hint");
       }
       const translator = await globalThis.Translator.create({
         ...options,
         monitor(monitor) {
           monitor.addEventListener("downloadprogress", (event) => {
             const progress = typeof event.loaded === "number" ? ` ${Math.round(event.loaded * 100)}%` : "";
-            if (dismissedRequest !== requestId) showPanel(`正在下载 Chrome 本地翻译模型…${progress}`, "hint");
+            if (requestId === translationRequest && dismissedRequest !== requestId) showPanel(`正在下载浏览器本地翻译模型…${progress}`, "hint");
           });
         }
       });
@@ -216,18 +285,20 @@
         if (translatableParts.length > 1) showPanel(`正在翻译第 ${translatedCount}/${translatableParts.length} 段…`, "hint");
         translatedParts.push(await translator.translate(part.value));
       }
-      if (dismissedRequest !== requestId) {
-        showPanel(translatedParts.join("") || "未获得翻译结果，请缩短选中文本后重试。");
+      if (requestId === translationRequest && dismissedRequest !== requestId) {
+        const finalTranslation = translatedParts.join("") || "";
+        showPanel(finalTranslation || "未获得翻译结果，请缩短选中文本后重试。", finalTranslation ? "" : "error");
+        if (finalTranslation) saveHistory(selectedText, finalTranslation, detectedLanguage, targetLanguage);
       }
       translator.destroy?.();
     } catch (error) {
       const code = error && error.message;
       if (code === "UNAVAILABLE_API") {
-        if (dismissedRequest !== requestId) showPanel("此 Chrome 未提供 Translator API。请更新 Chrome，并在 chrome://flags 中确认 Built-in AI / Translator API 未被禁用。", "error");
+        if (requestId === translationRequest && dismissedRequest !== requestId) showPanel("此浏览器未提供 Translator API。请更新 Chrome 或 Edge，并确认内置翻译功能未被禁用。", "error");
       } else if (code === "UNSUPPORTED_LANGUAGE") {
-        if (dismissedRequest !== requestId) showPanel("此 Chrome 当前不支持所选语言到简体中文的本地翻译模型。请更换原文语言、更新 Chrome 后重试。", "error");
+        if (requestId === translationRequest && dismissedRequest !== requestId) showPanel("此浏览器当前不支持所选原文语言和目标语言之间的本地翻译模型。请更换语言或更新浏览器后重试。", "error");
       } else {
-        if (dismissedRequest !== requestId) showPanel("本地翻译未完成。首次下载模型时请保持网络可用，然后重试；若仍失败，请更新 Chrome。", "error");
+        if (requestId === translationRequest && dismissedRequest !== requestId) showPanel("本地翻译未完成。首次下载模型时请保持网络可用，然后重试；若仍失败，请更新浏览器。", "error");
       }
       console.warn("Local selection translator:", error);
     }
@@ -235,25 +306,22 @@
 
   button.addEventListener("mousedown", (event) => event.preventDefault());
   button.addEventListener("click", translateSelection);
-  closeButton.addEventListener("click", closePanel);
-  settingCheckbox.addEventListener("change", () => {
-    updateCloseSetting(settingCheckbox.checked);
-    document.dispatchEvent(new CustomEvent("local-selection-translator:set-setting", {
-      detail: { closeOnOutsideClick }
-    }));
-  });
-  languageSelect.addEventListener("change", () => {
-    sourceLanguage = languageSelect.value;
-    document.dispatchEvent(new CustomEvent("local-selection-translator:set-setting", {
-      detail: { sourceLanguage }
-    }));
+  copyButton.addEventListener("click", copyTranslatedText);
+  closeButton.addEventListener("click", () => {
+    dismissedRequest = translationRequest;
+    closePanel();
   });
   document.addEventListener("local-selection-translator:setting", (event) => {
     const settings = event.detail || {};
     if (typeof settings.closeOnOutsideClick === "boolean") updateCloseSetting(settings.closeOnOutsideClick);
-    if (typeof settings.sourceLanguage === "string" && languageSelect.querySelector(`option[value="${settings.sourceLanguage}"]`)) {
+    if (settings.sourceLanguage === "auto" || SUPPORTED_LANGUAGES.has(settings.sourceLanguage)) {
       sourceLanguage = settings.sourceLanguage;
-      languageSelect.value = sourceLanguage;
+    }
+    if (SUPPORTED_LANGUAGES.has(settings.targetLanguage)) {
+      targetLanguage = settings.targetLanguage;
+    }
+    if (typeof settings.historyEnabled === "boolean") {
+      historyEnabled = settings.historyEnabled;
     }
   });
   document.dispatchEvent(new CustomEvent("local-selection-translator:request-setting"));
